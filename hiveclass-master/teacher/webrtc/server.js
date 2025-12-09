@@ -1,6 +1,12 @@
 var RTCPeerConnection = webkitRTCPeerConnection;
 var pc,
-    configuration = { iceServers: [] };
+    configuration = {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 10
+    };
 
 var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
     this.MAX_RETRIES = 3;

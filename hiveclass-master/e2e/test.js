@@ -480,7 +480,7 @@ var verifyWebRTCConnectionMetrics = function () {
 };
 
 var testICECandidateGathering = function () {
-    // Verify ICE candidate gathering completes (baseline: empty ICE servers)
+    // Verify ICE candidate gathering completes with STUN servers (Phase 2)
 
     return studentDriver.executeScript(function() {
         var rendezvousService = window.application && window.application.rendezvousService;
@@ -498,15 +498,16 @@ var testICECandidateGathering = function () {
         return {
             iceGatheringState: pc.iceGatheringState,
             iceConnectionState: pc.iceConnectionState,
-            hasEmptyICEServers: !pc.configuration || !pc.configuration.iceServers || pc.configuration.iceServers.length === 0,
+            hasICEServers: pc.configuration && pc.configuration.iceServers && pc.configuration.iceServers.length > 0,
+            iceServerCount: pc.configuration && pc.configuration.iceServers ? pc.configuration.iceServers.length : 0,
             gatheringComplete: pc.iceGatheringState === 'complete'
         };
     })
     .then(function(result) {
-        assert.equal(result.hasEmptyICEServers, true, 'Baseline should have empty ICE servers (will fix in Phase 2)');
-        // Note: With empty ICE servers, gathering may complete but NAT traversal may fail
-        // This is expected behavior that Phase 2 will improve
-        console.log('✓ ICE gathering verified (baseline with empty servers):', result);
+        assert.equal(result.hasICEServers, true, 'Should have STUN servers configured (Phase 2)');
+        assert.isAtLeast(result.iceServerCount, 2, 'Should have at least 2 STUN servers');
+        // With STUN servers, NAT traversal should work better
+        console.log('✓ ICE gathering verified with STUN servers:', result);
     });
 };
 

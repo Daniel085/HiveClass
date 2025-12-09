@@ -393,9 +393,20 @@ describe('RTCServer (Baseline - Deprecated APIs)', function() {
             expect(global.webkitRTCPeerConnection).to.equal(MockRTCPeerConnection);
         });
 
-        it('should have empty ICE servers configuration', function() {
-            const pc = new MockRTCPeerConnection({ iceServers: [] });
-            expect(pc.configuration.iceServers).to.be.an('array').that.is.empty;
+        it('should have STUN servers configured for NAT traversal', function() {
+            const config = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ],
+                iceCandidatePoolSize: 10
+            };
+            const pc = new MockRTCPeerConnection(config);
+
+            expect(pc.configuration.iceServers).to.be.an('array').with.lengthOf(2);
+            expect(pc.configuration.iceServers[0].urls).to.equal('stun:stun.l.google.com:19302');
+            expect(pc.configuration.iceServers[1].urls).to.equal('stun:stun1.l.google.com:19302');
+            expect(pc.configuration.iceCandidatePoolSize).to.equal(10);
         });
     });
 });
