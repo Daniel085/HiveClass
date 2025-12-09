@@ -258,17 +258,13 @@ var RTCClient = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 
-    this.attachStream = async function(stream) {
+    this.attachStream = function(stream) {
         try {
             // Modern API: Add each track individually
+            // onnegotiationneeded will be triggered automatically
             stream.getTracks().forEach(track => {
                 self.peerConnection.addTrack(track, stream);
             });
-
-            // Renegotiate with async/await
-            const offer = await self.peerConnection.createOffer();
-            await self.peerConnection.setLocalDescription(offer);
-            self.signalingService.send({sdp: self.peerConnection.localDescription}, self.serverId, 'webrtc');
         } catch (error) {
             console.error('Failed to attach stream:', error);
             if (self.onerror) {
@@ -277,20 +273,16 @@ var RTCClient = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 
-    this.detachStream = async function(stream) {
+    this.detachStream = function(stream) {
         try {
             // Modern API: Remove each sender that matches the stream
+            // onnegotiationneeded will be triggered automatically
             const senders = self.peerConnection.getSenders();
             senders.forEach(sender => {
                 if (sender.track && stream.getTracks().includes(sender.track)) {
                     self.peerConnection.removeTrack(sender);
                 }
             });
-
-            // Renegotiate with async/await
-            const offer = await self.peerConnection.createOffer();
-            await self.peerConnection.setLocalDescription(offer);
-            self.signalingService.send({sdp: self.peerConnection.localDescription}, self.serverId, 'webrtc');
         } catch (error) {
             console.error('Failed to detach stream:', error);
             if (self.onerror) {

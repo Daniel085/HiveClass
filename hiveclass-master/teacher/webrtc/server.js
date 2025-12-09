@@ -29,6 +29,11 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
 
     this.messages = {};
 
+    // Perfect Negotiation state per peer (server is always impolite)
+    this.makingOffer = {};  // { peerId: boolean }
+    this.ignoreOffer = {};  // { peerId: boolean }
+    this.isSettingRemoteAnswerPending = {};  // { peerId: boolean }
+
     var self = this;
 
     this.start = function() {
@@ -53,6 +58,24 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
                 self.signalingService.send({candidate: evt.candidate, remotePeerId: peerId}, self.peerId, 'webrtc');
             }
         };
+
+        // Perfect Negotiation: Handle offer creation with collision detection (per peer)
+        peerConnection.onnegotiationneeded = (function(peerId) {
+            return async function() {
+                try {
+                    self.makingOffer[peerId] = true;
+                    await peerConnection.setLocalDescription();  // Creates offer automatically
+                    self.signalingService.send({sdp: peerConnection.localDescription, remotePeerId: peerId}, self.peerId, 'webrtc');
+                } catch (error) {
+                    console.error('Negotiation failed for peer', peerId, ':', error);
+                    if (self.onerror) {
+                        self.onerror(error, peerId);
+                    }
+                } finally {
+                    self.makingOffer[peerId] = false;
+                }
+            };
+        })(peerId);
 
         peerConnection.ondatachannel = (function(peerId) {
             return function (event) {
@@ -152,13 +175,26 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
             if (data.sdp) {
                 try {
                     var desc = new RTCSessionDescription(data.sdp);
+
+                    // Perfect Negotiation: Detect offer collision (per peer)
+                    const polite = false;  // Server is always impolite
+                    const offerCollision = (desc.type === 'offer') &&
+                                          (self.makingOffer[peerId] || peerConnection.signalingState !== 'stable');
+
+                    self.ignoreOffer[peerId] = !polite && offerCollision;
+                    if (self.ignoreOffer[peerId]) {
+                        console.log('Ignoring offer from peer', peerId, 'due to collision (impolite peer)');
+                        return;
+                    }
+
+                    // Perfect Negotiation: Handle rollback for polite peer (not applicable to server)
+                    self.isSettingRemoteAnswerPending[peerId] = desc.type === 'answer';
+                    await peerConnection.setRemoteDescription(desc);
+                    self.isSettingRemoteAnswerPending[peerId] = false;
+
                     if (desc.type == "offer") {
-                        await peerConnection.setRemoteDescription(desc);
-                        const answer = await peerConnection.createAnswer();
-                        await peerConnection.setLocalDescription(answer);
+                        await peerConnection.setLocalDescription();  // Creates answer automatically
                         self.signalingService.send({sdp: peerConnection.localDescription, remotePeerId: peerId}, self.peerId, 'webrtc');
-                    } else {
-                        await peerConnection.setRemoteDescription(desc);
                     }
                 } catch (error) {
                     console.error('SDP handling failed for peer', peerId, ':', error);
@@ -251,17 +287,13 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 
-    this._addStreamToPeerConnection = async function (stream, peerConnection) {
+    this._addStreamToPeerConnection = function (stream, peerConnection) {
         try {
             // Modern API: Add each track individually
+            // onnegotiationneeded will be triggered automatically
             stream.getTracks().forEach(track => {
                 peerConnection.addTrack(track, stream);
             });
-
-            // Renegotiate with async/await
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
         } catch (error) {
             console.error('Failed to add stream to peer', peerConnection.id, ':', error);
             if (self.onerror) {
@@ -270,21 +302,17 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 
-    this._removeStreamToPeerConnection = async function (stream, peerConnection) {
+    this._removeStreamToPeerConnection = function (stream, peerConnection) {
         if (stream) {
             try {
                 // Modern API: Remove each sender that matches the stream
+                // onnegotiationneeded will be triggered automatically
                 const senders = peerConnection.getSenders();
                 senders.forEach(sender => {
                     if (sender.track && stream.getTracks().includes(sender.track)) {
                         peerConnection.removeTrack(sender);
                     }
                 });
-
-                // Renegotiate with async/await
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
             } catch (error) {
                 console.error('Failed to remove stream from peer', peerConnection.id, ':', error);
                 if (self.onerror) {
