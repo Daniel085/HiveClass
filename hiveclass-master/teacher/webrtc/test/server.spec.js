@@ -199,63 +199,76 @@ describe('RTCServer (Baseline - Deprecated APIs)', function() {
         });
     });
 
-    describe('Stream Management (Broadcast to Multiple Peers)', function() {
-        it('should attach same stream to multiple peer connections', function() {
+    describe('Stream Management (Modern Track-based APIs)', function() {
+        it('should attach same stream tracks to multiple peer connections', function() {
             const stream = new MockMediaStream([new MockMediaStreamTrack('video')]);
             const peerConnections = {};
 
             // Create 3 peer connections
             for (let i = 1; i <= 3; i++) {
                 const pc = new MockRTCPeerConnection({ iceServers: [] });
-                pc.addStream(stream); // deprecated API
+                // Modern API: Add each track individually
+                stream.getTracks().forEach(track => {
+                    pc.addTrack(track, stream);
+                });
                 peerConnections[`student-${i}`] = pc;
             }
 
-            // Verify stream attached to all
+            // Verify tracks attached to all
             expect(peerConnections['student-1'].getSenders()).to.have.lengthOf(1);
             expect(peerConnections['student-2'].getSenders()).to.have.lengthOf(1);
             expect(peerConnections['student-3'].getSenders()).to.have.lengthOf(1);
         });
 
-        it('should detach stream from all peer connections', function() {
+        it('should detach stream tracks from all peer connections', function() {
             const stream = new MockMediaStream([new MockMediaStreamTrack('video')]);
             const peerConnections = {};
 
             // Create and attach to 3 peers
             for (let i = 1; i <= 3; i++) {
                 const pc = new MockRTCPeerConnection({ iceServers: [] });
-                pc.addStream(stream);
+                stream.getTracks().forEach(track => {
+                    pc.addTrack(track, stream);
+                });
                 peerConnections[`student-${i}`] = pc;
             }
 
             // Detach from all
             for (const peerId in peerConnections) {
-                peerConnections[peerId].removeStream(stream);
+                const senders = peerConnections[peerId].getSenders();
+                senders.forEach(sender => {
+                    if (sender.track && stream.getTracks().includes(sender.track)) {
+                        peerConnections[peerId].removeTrack(sender);
+                    }
+                });
             }
 
-            // Verify stream removed from all
+            // Verify tracks removed from all
             expect(peerConnections['student-1'].getSenders()).to.have.lengthOf(0);
             expect(peerConnections['student-2'].getSenders()).to.have.lengthOf(0);
             expect(peerConnections['student-3'].getSenders()).to.have.lengthOf(0);
         });
 
-        it('should handle onaddstream from multiple students', function() {
+        it('should handle ontrack from multiple students', function() {
             const receivedStreams = {};
 
             for (let i = 1; i <= 3; i++) {
                 const peerId = `student-${i}`;
                 const pc = new MockRTCPeerConnection({ iceServers: [] });
 
-                pc.onaddstream = (function(id) {
+                pc.ontrack = (function(id) {
                     return function(event) {
-                        receivedStreams[id] = event.stream;
+                        receivedStreams[id] = event.streams[0];
                     };
                 })(peerId);
 
-                // Simulate receiving stream
+                // Simulate receiving track
                 const mockStream = new MockMediaStream([new MockMediaStreamTrack('video')]);
-                if (pc.onaddstream) {
-                    pc.onaddstream({ stream: mockStream });
+                if (pc.ontrack) {
+                    pc.ontrack({
+                        track: mockStream.getTracks()[0],
+                        streams: [mockStream]
+                    });
                 }
             }
 
@@ -388,8 +401,11 @@ describe('RTCServer (Baseline - Deprecated APIs)', function() {
         });
     });
 
-    describe('Vendor Prefix Usage (Deprecated)', function() {
-        it('should use webkitRTCPeerConnection vendor prefix', function() {
+    describe('Modern RTCPeerConnection API', function() {
+        it('should use standard RTCPeerConnection with fallback for older browsers', function() {
+            // Modern browsers should use window.RTCPeerConnection
+            expect(global.RTCPeerConnection).to.equal(MockRTCPeerConnection);
+            // Fallback should still be available for older browsers
             expect(global.webkitRTCPeerConnection).to.equal(MockRTCPeerConnection);
         });
 

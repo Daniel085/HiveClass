@@ -56,7 +56,10 @@ describe('RTCClient (Baseline - Deprecated APIs)', function() {
             expect(pc.configuration.iceCandidatePoolSize).to.equal(10);
         });
 
-        it('should use webkitRTCPeerConnection vendor prefix (deprecated)', function() {
+        it('should use standard RTCPeerConnection with fallback for older browsers', function() {
+            // Modern browsers should use window.RTCPeerConnection
+            expect(global.RTCPeerConnection).to.equal(MockRTCPeerConnection);
+            // Fallback should still be available for older browsers
             expect(global.webkitRTCPeerConnection).to.equal(MockRTCPeerConnection);
         });
 
@@ -220,94 +223,104 @@ describe('RTCClient (Baseline - Deprecated APIs)', function() {
         });
     });
 
-    describe('Callback-based SDP Handling', function() {
-        it('should use callback pattern for createOffer (deprecated)', function(done) {
+    describe('Modern Promise-based SDP Handling', function() {
+        it('should support async/await for createOffer', async function() {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
 
-            pc.createOffer(function(offer) {
-                expect(offer).to.have.property('type', 'offer');
-                expect(offer).to.have.property('sdp');
-                done();
-            }, function(error) {
-                done(error);
-            });
+            const offer = await pc.createOffer();
+            expect(offer).to.have.property('type', 'offer');
+            expect(offer).to.have.property('sdp');
         });
 
-        it('should use callback pattern for setLocalDescription (deprecated)', function(done) {
+        it('should support async/await for setLocalDescription', async function() {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
 
-            pc.createOffer(function(offer) {
-                pc.setLocalDescription(offer, function() {
-                    expect(pc.localDescription).to.not.be.null;
-                    expect(pc.localDescription.type).to.equal('offer');
-                    done();
-                }, function(error) {
-                    done(error);
-                });
-            }, function(error) {
-                done(error);
-            });
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            expect(pc.localDescription).to.not.be.null;
+            expect(pc.localDescription.type).to.equal('offer');
         });
 
-        it('should use callback pattern for createAnswer (deprecated)', function(done) {
+        it('should support async/await for createAnswer', async function() {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
             const remoteOffer = {
                 type: 'offer',
                 sdp: 'v=0\r\no=- 1234 1234 IN IP4 127.0.0.1\r\n...'
             };
 
-            pc.setRemoteDescription(remoteOffer, function() {
-                pc.createAnswer(function(answer) {
-                    expect(answer).to.have.property('type', 'answer');
-                    expect(answer).to.have.property('sdp');
-                    done();
-                }, function(error) {
-                    done(error);
-                });
-            }, function(error) {
-                done(error);
-            });
+            await pc.setRemoteDescription(remoteOffer);
+            const answer = await pc.createAnswer();
+            expect(answer).to.have.property('type', 'answer');
+            expect(answer).to.have.property('sdp');
         });
     });
 
-    describe('Stream Management (Deprecated APIs)', function() {
-        it('should use addStream to attach media (deprecated)', function() {
+    describe('Stream Management (Modern Track-based APIs)', function() {
+        it('should use addTrack to attach media tracks', function() {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
             const stream = new MockMediaStream([
                 new MockMediaStreamTrack('video'),
                 new MockMediaStreamTrack('audio')
             ]);
 
-            pc.addStream(stream);
+            // Modern API: Add each track individually
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
+            });
 
             expect(pc.getSenders()).to.have.lengthOf(2);
         });
 
-        it('should use removeStream to detach media (deprecated)', function() {
+        it('should use removeTrack to detach media tracks', function() {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
             const stream = new MockMediaStream([
                 new MockMediaStreamTrack('video')
             ]);
 
-            pc.addStream(stream);
+            // Add track
+            const sender = pc.addTrack(stream.getTracks()[0], stream);
             expect(pc.getSenders()).to.have.lengthOf(1);
 
-            pc.removeStream(stream);
+            // Remove track
+            pc.removeTrack(sender);
             expect(pc.getSenders()).to.have.lengthOf(0);
         });
 
-        it('should trigger onaddstream when receiving remote stream (deprecated)', function(done) {
+        it('should trigger ontrack when receiving remote track', function(done) {
             const pc = new MockRTCPeerConnection({ iceServers: [] });
             const remoteStream = new MockMediaStream([new MockMediaStreamTrack('video')]);
 
-            pc.onaddstream = function(event) {
-                expect(event.stream).to.equal(remoteStream);
+            pc.ontrack = function(event) {
+                expect(event.streams[0]).to.equal(remoteStream);
                 done();
             };
 
-            // Simulate receiving stream
-            if (pc.onaddstream) {
-                pc.onaddstream({ stream: remoteStream });
+            // Simulate receiving track
+            if (pc.ontrack) {
+                pc.ontrack({
+                    track: remoteStream.getTracks()[0],
+                    streams: [remoteStream]
+                });
+            }
+        });
+
+        it('should support backward compatibility with onaddstream via ontrack', function(done) {
+            const pc = new MockRTCPeerConnection({ iceServers: [] });
+            const remoteStream = new MockMediaStream([new MockMediaStreamTrack('video')]);
+
+            // Client code still uses onaddstream callback name
+            // but ontrack event is used internally
+            pc.ontrack = function(event) {
+                // Modern ontrack converts to old onaddstream interface
+                expect(event.streams[0]).to.equal(remoteStream);
+                done();
+            };
+
+            if (pc.ontrack) {
+                pc.ontrack({
+                    track: remoteStream.getTracks()[0],
+                    streams: [remoteStream]
+                });
             }
         });
     });

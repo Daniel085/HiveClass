@@ -1,7 +1,6 @@
 process.title = 'rendezvous';
 
-var WebSocket = require('ws'),
-    WebsocketServer = WebSocket.Server,
+var { WebSocketServer } = require('ws'),
     Promise = require('bluebird'),
     roomRepository = new (require('./repositories/room').RoomRepository)(),
     codeRepository = new (require('./repositories/code').CodeRepository)(),
@@ -10,9 +9,9 @@ var WebSocket = require('ws'),
 
 var PORT = 9090;
 
-var wss = new WebsocketServer({ port: PORT }, function() {
+var wss = new WebSocketServer({ port: PORT }, function() {
     var address = wss._server.address();
-    console.log('Websocket server listening on', [address.address, address.port].join(':'));
+    console.log('WebSocket server listening on', [address.address, address.port].join(':'));
 });
 
 var clients = {};

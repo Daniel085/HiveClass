@@ -33,59 +33,81 @@ class MockRTCPeerConnection {
     }
 
     /**
-     * Create SDP offer (deprecated callback version)
+     * Create SDP offer (supports both callback and Promise APIs)
      */
     createOffer(successCallback, errorCallback, options) {
-        setTimeout(() => {
-            const offer = {
-                type: 'offer',
-                sdp: 'v=0\r\no=- 1234567890 1234567890 IN IP4 127.0.0.1\r\n...'
-            };
-            if (successCallback) {
+        const offer = {
+            type: 'offer',
+            sdp: 'v=0\r\no=- 1234567890 1234567890 IN IP4 127.0.0.1\r\n...'
+        };
+
+        // If callback provided, use callback pattern (deprecated API)
+        if (typeof successCallback === 'function') {
+            setTimeout(() => {
                 successCallback(offer);
-            }
-        }, 0);
+            }, 0);
+        } else {
+            // Return Promise (modern API)
+            return Promise.resolve(offer);
+        }
     }
 
     /**
-     * Create SDP answer (deprecated callback version)
+     * Create SDP answer (supports both callback and Promise APIs)
      */
     createAnswer(successCallback, errorCallback, options) {
-        setTimeout(() => {
-            const answer = {
-                type: 'answer',
-                sdp: 'v=0\r\no=- 9876543210 9876543210 IN IP4 127.0.0.1\r\n...'
-            };
-            if (successCallback) {
+        const answer = {
+            type: 'answer',
+            sdp: 'v=0\r\no=- 9876543210 9876543210 IN IP4 127.0.0.1\r\n...'
+        };
+
+        // If callback provided, use callback pattern (deprecated API)
+        if (typeof successCallback === 'function') {
+            setTimeout(() => {
                 successCallback(answer);
-            }
-        }, 0);
+            }, 0);
+        } else {
+            // Return Promise (modern API)
+            return Promise.resolve(answer);
+        }
     }
 
     /**
-     * Set local description (deprecated callback version)
+     * Set local description (supports both callback and Promise APIs)
      */
     setLocalDescription(description, successCallback, errorCallback) {
-        setTimeout(() => {
+        // If callback provided, use callback pattern (deprecated API)
+        if (typeof successCallback === 'function') {
+            setTimeout(() => {
+                this.localDescription = description;
+                this.signalingState = description.type === 'offer' ? 'have-local-offer' : 'stable';
+                successCallback();
+            }, 0);
+        } else {
+            // Return Promise (modern API)
             this.localDescription = description;
             this.signalingState = description.type === 'offer' ? 'have-local-offer' : 'stable';
-            if (successCallback) {
-                successCallback();
-            }
-        }, 0);
+            return Promise.resolve();
+        }
     }
 
     /**
-     * Set remote description (deprecated callback version)
+     * Set remote description (supports both callback and Promise APIs)
      */
     setRemoteDescription(description, successCallback, errorCallback) {
-        setTimeout(() => {
+        // If callback provided, use callback pattern (deprecated API)
+        if (typeof successCallback === 'function') {
+            setTimeout(() => {
+                this.remoteDescription = description;
+                this.signalingState = description.type === 'offer' ? 'have-remote-offer' : 'stable';
+                successCallback();
+            }, 0);
+        } else {
+            // Return Promise (modern API)
             this.remoteDescription = description;
             this.signalingState = description.type === 'offer' ? 'have-remote-offer' : 'stable';
-            if (successCallback) {
-                successCallback();
-            }
-        }, 0);
+            return Promise.resolve();
+        }
     }
 
     /**

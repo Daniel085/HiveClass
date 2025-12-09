@@ -1,4 +1,8 @@
-var RTCPeerConnection = webkitRTCPeerConnection;
+// Use standard RTCPeerConnection with fallback for older browsers
+var RTCPeerConnection = window.RTCPeerConnection ||
+                        window.webkitRTCPeerConnection ||
+                        window.mozRTCPeerConnection;
+
 var pc,
     configuration = {
         iceServers: [
@@ -82,10 +86,12 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
             };
         })(peerId);
 
-        peerConnection.onaddstream = (function(peerId) {
+        // Modern ontrack API (replaces deprecated onaddstream)
+        peerConnection.ontrack = (function(peerId) {
             return function(event) {
+                // event.streams[0] contains the MediaStream
                 if (typeof self.onaddstream === 'function') {
-                  self.onaddstream(event.stream, peerId);
+                    self.onaddstream(event.streams[0], peerId);
                 }
             };
         })(peerId);
@@ -136,7 +142,7 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
         return this.peerConnections[peerId];
     };
 
-    this._handleSignalingMessage = function(payload) {
+    this._handleSignalingMessage = async function(payload) {
         var message = JSON.parse(payload);
         if (message.peerId) {
 
@@ -144,17 +150,21 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
             var peerConnection = self._getPeerConnection(peerId);
             var data = message.data;
             if (data.sdp) {
-                var desc = new RTCSessionDescription(data.sdp);
-                if (desc.type == "offer") {
-                    peerConnection.setRemoteDescription(desc, function() {
-                        peerConnection.createAnswer(function(answer) {
-                            peerConnection.setLocalDescription(answer, function() {
-                                self.signalingService.send({sdp: peerConnection.localDescription, remotePeerId: peerId}, self.peerId, 'webrtc');
-                            });
-                        });
-                    });
-                } else {
-                    peerConnection.setRemoteDescription(desc);
+                try {
+                    var desc = new RTCSessionDescription(data.sdp);
+                    if (desc.type == "offer") {
+                        await peerConnection.setRemoteDescription(desc);
+                        const answer = await peerConnection.createAnswer();
+                        await peerConnection.setLocalDescription(answer);
+                        self.signalingService.send({sdp: peerConnection.localDescription, remotePeerId: peerId}, self.peerId, 'webrtc');
+                    } else {
+                        await peerConnection.setRemoteDescription(desc);
+                    }
+                } catch (error) {
+                    console.error('SDP handling failed for peer', peerId, ':', error);
+                    if (self.onerror) {
+                        self.onerror(error, peerId);
+                    }
                 }
             } else if (data.candidate) {
                 peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
@@ -241,23 +251,46 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 
-    this._addStreamToPeerConnection = function (stream, peerConnection) {
-        peerConnection.addStream(stream);
-        peerConnection.createOffer(function (offer) {
-            peerConnection.setLocalDescription(offer, function () {
-                self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
+    this._addStreamToPeerConnection = async function (stream, peerConnection) {
+        try {
+            // Modern API: Add each track individually
+            stream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, stream);
             });
-        });
+
+            // Renegotiate with async/await
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
+        } catch (error) {
+            console.error('Failed to add stream to peer', peerConnection.id, ':', error);
+            if (self.onerror) {
+                self.onerror(error, peerConnection.id);
+            }
+        }
     };
 
-    this._removeStreamToPeerConnection = function (stream, peerConnection) {
+    this._removeStreamToPeerConnection = async function (stream, peerConnection) {
         if (stream) {
-            peerConnection.removeStream(stream);
-            peerConnection.createOffer(function (offer) {
-                peerConnection.setLocalDescription(offer, function () {
-                    self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
+            try {
+                // Modern API: Remove each sender that matches the stream
+                const senders = peerConnection.getSenders();
+                senders.forEach(sender => {
+                    if (sender.track && stream.getTracks().includes(sender.track)) {
+                        peerConnection.removeTrack(sender);
+                    }
                 });
-            });
+
+                // Renegotiate with async/await
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                self.sendMessageToClient({sdp: peerConnection.localDescription, remotePeerId: peerConnection.id}, peerConnection.id);
+            } catch (error) {
+                console.error('Failed to remove stream from peer', peerConnection.id, ':', error);
+                if (self.onerror) {
+                    self.onerror(error, peerConnection.id);
+                }
+            }
         }
     };
 
