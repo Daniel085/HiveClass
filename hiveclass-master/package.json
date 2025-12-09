@@ -1,4 +1,17 @@
 {
   "name": "hiveschool-parent",
-  "version": "1.5.2"
+  "version": "1.5.2",
+  "description": "HiveClass client applications and tests",
+  "scripts": {
+    "test": "mocha 'student/webrtc/test/**/*.spec.js' 'teacher/webrtc/test/**/*.spec.js' --require test-utils/webrtc-mock.js",
+    "test:client": "mocha 'student/webrtc/test/**/*.spec.js' --require test-utils/webrtc-mock.js",
+    "test:server": "mocha 'teacher/webrtc/test/**/*.spec.js' --require test-utils/webrtc-mock.js",
+    "test:coverage": "nyc npm test"
+  },
+  "devDependencies": {
+    "mocha": "^10.7.0",
+    "chai": "^5.1.0",
+    "sinon": "^19.0.0",
+    "nyc": "^17.1.0"
+  }
 }
