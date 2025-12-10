@@ -1,25 +1,26 @@
 process.title = 'rendezvous';
 
-var { WebSocketServer } = require('ws'),
-    Promise = require('bluebird'),
-    roomRepository = new (require('./repositories/room').RoomRepository)(),
-    codeRepository = new (require('./repositories/code').CodeRepository)(),
-    roomService = new (require('./services/room').RoomService)(roomRepository, codeRepository),
-    webrtcService = new (require('./services/webrtc').WebrtcService)(roomService);
+const { WebSocketServer } = require('ws');
+const Hapi = require('@hapi/hapi');
+const roomRepository = new (require('./repositories/room').RoomRepository)();
+const codeRepository = new (require('./repositories/code').CodeRepository)();
+const roomService = new (require('./services/room').RoomService)(roomRepository, codeRepository);
+const webrtcService = new (require('./services/webrtc').WebrtcService)(roomService);
 
-var PORT = 9090;
+const PORT = 9090;
 
-var wss = new WebSocketServer({ port: PORT }, function() {
-    var address = wss._server.address();
+// WebSocket Server for WebRTC signaling
+const wss = new WebSocketServer({ port: PORT }, function() {
+    const address = wss._server.address();
     console.log('WebSocket server listening on', [address.address, address.port].join(':'));
 });
 
-var clients = {};
+const clients = {};
 
 wss.on('connection', function(socket) {
     socket.id = Date.now() + '-' + Math.round(Math.random() * 1000000);
     clients[socket.id] = socket;
-    var pingInterval = setInterval(function() {
+    const pingInterval = setInterval(function() {
         socket.ping();
     }, 5000);
     socket.on('close', function() {
@@ -31,7 +32,7 @@ wss.on('connection', function(socket) {
             if (process.env.DEBUG) {
                 console.log(payload);
             }
-            var message = JSON.parse(payload);
+            const message = JSON.parse(payload);
             if (message.type) {
                 switch (message.type) {
                     case 'presence':
@@ -65,18 +66,19 @@ wss.on('connection', function(socket) {
                 }
             }
         } catch (err) {
-          console.log(err.stack);
+            console.log(err.stack);
         }
     });
 });
 
 function signalRoomChange(socket) {
-    for (var socketId in clients) {
+    for (const socketId in clients) {
         if (clients.hasOwnProperty(socketId) && socketId != socket.id) {
             clients[socketId].send(makeDataResponse('', '', 'roomChange', ''));
         }
     }
 }
+
 function handlePresenceMessage(message, socket) {
     switch(message.cmd) {
         case 'createRoom':
@@ -85,34 +87,26 @@ function handlePresenceMessage(message, socket) {
                     signalRoomChange(socket);
                     return data;
                 });
-            break;
         case 'lock':
             return roomService.lock(message.data.id);
-            break;
         case 'unlock':
             return roomService.unlock(message.data.id);
-            break;
         case 'listRooms':
             return roomService.listRooms();
-            break;
         case 'findRoomByCode':
             return roomService.findRoomByCode(message.data.code);
-            break;
         case 'getRoom':
             return roomService.get(message.data.id);
-            break;
         case 'closeRoom':
             return roomService.close(message.data.id)
                 .then(function(data) {
                     signalRoomChange(socket);
                     return data;
                 });
-            break;
         default:
-            var errorMessage = 'Unknown cmd: ' + message.cmd;
+            const errorMessage = 'Unknown cmd: ' + message.cmd;
             console.log(errorMessage);
             return Promise.reject(new Error(errorMessage));
-            break;
     }
 }
 
@@ -120,18 +114,14 @@ function handleWebrtcMessage(message, socket) {
     switch (message.cmd) {
         case 'offer':
             return webrtcService.sendOfferToRoomOwner(message, socket);
-            break;
         case 'answer':
             return webrtcService.sendAnswerToClient(message, socket);
-            break;
         case 'candidates':
             return webrtcService.sendCandidates(message);
-            break;
         default:
-            var errorMessage = 'Unknown cmd: ' + message.cmd;
+            const errorMessage = 'Unknown cmd: ' + message.cmd;
             console.log(errorMessage);
             return Promise.reject(new Error(errorMessage));
-            break;
     }
 }
 
@@ -147,56 +137,63 @@ function makeErrorResponse(source, id, type, err, message) {
     return JSON.stringify({id: id, source: source, type: type, success: false, error: err.message, cause: err.cause, request: message});
 }
 
-var Hapi = require('hapi'),
-    server = new Hapi.Server({
+// HTTP REST API Server
+const initHapiServer = async () => {
+    const serverConfig = {
+        host: '0.0.0.0',
+        port: 10000 + PORT,
         debug: {
             log: ['error'],
             request: ['error']
         }
-    });
-var serverConfig = {
-    port: 10000 + PORT
-};
-server.connection(serverConfig);
+    };
 
-server.register([
+    const server = Hapi.server(serverConfig);
+
+    await server.register([
         require('blipp'),
         {
-            register: require('good'),
+            plugin: require('@hapi/good'),
             options: {
-                opsInterval: 5000,
-                reporters: [
-                    {
-                        reporter: require('good-console'),
-                        args: [{ log: 'error', response: 'error', request: 'error' }]
-                    }
-                ]
-            }
-        }
-    ],
-    function() {
-        server.route({
-            method: 'GET',
-            path: '/classroom',
-            config: {
-                handler: function(request, reply) {
-                    reply(roomService.listRooms()
-                        .then(function(rooms) {
-                            var roomsPromises = [];
-                            var roomIds = rooms.roomIds;
-                            for (var i = 0, length = roomIds.length; i < length; i++) {
-                                roomsPromises.push(roomService.get(roomIds[i]));
-                            }
-                            return Promise.all(roomsPromises);
-                        }));
+                ops: {
+                    interval: 5000
                 },
-                state: {
-                    failAction: 'ignore'
+                reporters: {
+                    console: [
+                        {
+                            module: '@hapi/good-console',
+                            args: [{ log: 'error', response: 'error', request: 'error' }]
+                        },
+                        'stdout'
+                    ]
                 }
             }
-        });
+        }
+    ]);
+
+    server.route({
+        method: 'GET',
+        path: '/classroom',
+        options: {
+            handler: async (request, h) => {
+                const rooms = await roomService.listRooms();
+                const roomIds = rooms.roomIds;
+                const roomsPromises = roomIds.map(roomId => roomService.get(roomId));
+                return Promise.all(roomsPromises);
+            },
+            state: {
+                failAction: 'ignore'
+            }
+        }
     });
 
-server.start(function() {
+    await server.start();
     console.log('Server listening on 0.0.0.0:' + serverConfig.port);
+};
+
+process.on('unhandledRejection', (err) => {
+    console.log(err);
+    process.exit(1);
 });
+
+initHapiServer();

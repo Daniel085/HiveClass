@@ -1,5 +1,3 @@
-var Promise = require('bluebird');
-
 exports.RoomRepository = function RoomRepository() {
     this._storage = {};
     this._roomIdsByCode = {};

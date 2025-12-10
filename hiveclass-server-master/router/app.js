@@ -1,26 +1,19 @@
 process.title = 'router';
 
-var config = require('./config'),
-    Hapi = require('hapi'),
-    server = new Hapi.Server();
+const config = require('./config');
+const Hapi = require('@hapi/hapi');
 
-var serverConfig = {
+const serverConfig = {
     host: config.server.host,
     port: config.server.port
 };
-server.connection(serverConfig);
 
-var backends = config.backends;
-
-server.ext('onRequest', function(request, reply) {
-    request.headers['x-public-host'] = request.headers.host;
-    reply.continue();
-});
+const backends = config.backends;
 
 function generateRoutes(upstreams) {
-    var routes = [];
-    for (var prefix in upstreams) {
-        var upstream = upstreams[prefix];
+    const routes = [];
+    for (const prefix in upstreams) {
+        const upstream = upstreams[prefix];
         routes.push({
             path: '/' + prefix + '/{param*}',
             method: '*',
@@ -44,26 +37,45 @@ function generateRoutes(upstreams) {
     return routes;
 }
 
-server.register([
-        require('blipp'),
-        require('h2o2'),
-        {
-            register: require('good'),
-            options: {
-                opsInterval: 5000,
-                reporters: [
-                    {
-                        reporter: require('good-console'),
-                        args: [{log: 'error', response: 'error', request: 'error'}]
-                    }
-                ]
-            }
-        }
-    ],
-    function() {
-        server.route(generateRoutes(backends));
+const init = async () => {
+    const server = Hapi.server(serverConfig);
+
+    server.ext('onRequest', (request, h) => {
+        request.headers['x-public-host'] = request.headers.host;
+        return h.continue;
     });
 
-server.start(function() {
+    await server.register([
+        require('blipp'),
+        require('@hapi/h2o2'),
+        {
+            plugin: require('@hapi/good'),
+            options: {
+                ops: {
+                    interval: 5000
+                },
+                reporters: {
+                    console: [
+                        {
+                            module: '@hapi/good-console',
+                            args: [{ log: 'error', response: 'error', request: 'error' }]
+                        },
+                        'stdout'
+                    ]
+                }
+            }
+        }
+    ]);
+
+    server.route(generateRoutes(backends));
+
+    await server.start();
     console.log('Server listening on ' + serverConfig.host + ':' + serverConfig.port);
+};
+
+process.on('unhandledRejection', (err) => {
+    console.log(err);
+    process.exit(1);
 });
+
+init();

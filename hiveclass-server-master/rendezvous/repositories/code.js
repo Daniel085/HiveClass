@@ -1,5 +1,3 @@
-var Promise = require('bluebird');
-
 exports.CodeRepository = function CodeRepository() {
     this._storage = [];
 

@@ -4,13 +4,12 @@
   "description": "HiveClass rendezvous and signaling service",
   "main": "app.js",
   "dependencies": {
-    "ws": "^8.18.0",
-    "blipp": "^2.3.0",
-    "bluebird": "^3.3.1",
-    "good": "^5.1.2",
-    "good-console": "^4.1.0",
-    "hapi": "^13.0.0",
-    "hapi-auth-cookie": "^2.2.0",
-    "mongodb": "^2.1.7"
+    "@hapi/hapi": "^21.3.0",
+    "@hapi/good": "^9.0.0",
+    "@hapi/good-console": "^9.0.0",
+    "@hapi/cookie": "^12.0.0",
+    "blipp": "^4.0.0",
+    "mongodb": "^6.0.0",
+    "ws": "^8.18.0"
   }
 }

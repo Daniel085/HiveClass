@@ -1,84 +1,98 @@
-var MongoClient = require('mongodb').MongoClient,
-    Promise = require('bluebird');
+const { MongoClient } = require('mongodb');
 
-exports.WhitelistService = function(dbUrl) {
-    var self = this;
+class WhitelistService {
+    constructor(dbUrl) {
+        this.dbUrl = dbUrl;
+        this._clientPromise = null;
+        this._db = null;
+        this._collection = null;
+        this._connect();
+    }
 
-    MongoClient.connect(dbUrl)
-        .then(function(db) {
-            self._db = db;
-            self._collection = db.collection('client');
-        });
-
-    this.isDomainAuthorized = function(domain) {
-        if (domain) {
-            return this._collection.count({domains: domain, active: true})
-                .then(function (count) {
-                    return count > 0;
-                });
+    async _connect() {
+        try {
+            const client = await MongoClient.connect(this.dbUrl);
+            this._db = client.db();
+            this._collection = this._db.collection('client');
+        } catch (error) {
+            console.error('Failed to connect to MongoDB:', error);
+            throw error;
         }
-        else {
-            return Promise.resolve(false);
-        }
-    };
+    }
 
-    this.createClient = function(clientName) {
-        if (clientName) {
-            return this._collection.count({ name: clientName })
-                .then(function(count) {
-                    if (count > 0) {
-                        return 409;
-                    }
-                    return self._collection.insert({ name: clientName, active: true })
-                        .then(function() {
-                            return 201;
-                        });
-                });
-        } else {
-            return Promise.resolve(400);
+    async _ensureConnected() {
+        if (!this._collection) {
+            await this._connect();
         }
-    };
+    }
 
-    this.addDomainsToClient = function(clientName, domains) {
+    async isDomainAuthorized(domain) {
+        if (!domain) {
+            return false;
+        }
+
+        await this._ensureConnected();
+        const count = await this._collection.countDocuments({ domains: domain, active: true });
+        return count > 0;
+    }
+
+    async createClient(clientName) {
+        if (!clientName) {
+            return 400;
+        }
+
+        await this._ensureConnected();
+        const count = await this._collection.countDocuments({ name: clientName });
+
+        if (count > 0) {
+            return 409;
+        }
+
+        await this._collection.insertOne({ name: clientName, active: true });
+        return 201;
+    }
+
+    async addDomainsToClient(clientName, domains) {
         if (typeof domains === 'string') {
             domains = [domains];
         }
-        var updatePromises = [];
-        for (var i = 0, domainsLength = domains.length; i < domainsLength; i++) {
-            updatePromises.push(this._collection.findOneAndUpdate({ name: clientName }, { $addToSet: { domains: domains[i] }}));
-        }
-        return Promise.all(updatePromises)
-            .then(function() {
-                return 204;
-            });
-    };
 
-    this.setClientActiveStatus = function(clientName, activeStatus) {
-        return this._collection.findOneAndUpdate({ name: clientName }, { $set: { active: activeStatus }})
-            .then(function() {
-                return 204;
-            });
-    };
+        await this._ensureConnected();
+        const updatePromises = domains.map(domain =>
+            this._collection.findOneAndUpdate(
+                { name: clientName },
+                { $addToSet: { domains: domain } }
+            )
+        );
 
-    this.getClients = function() {
-        return this._collection.find({}, { name: true }).toArray()
-            .then(function(clients) {
-                return clients.map(function(x) { return x.name; });
-            });
-    };
+        await Promise.all(updatePromises);
+        return 204;
+    }
 
-    this.getClient = function(clientName) {
-        return this._collection.find({ name: clientName }).toArray()
-            .then(function(clients) {
-                return clients.map(function(x) {
-                    return {
-                        name: x.name,
-                        domains: x.domains,
-                        active: !!x.active
-                    };
-                })[0];
-            });
-    };
+    async setClientActiveStatus(clientName, activeStatus) {
+        await this._ensureConnected();
+        await this._collection.findOneAndUpdate(
+            { name: clientName },
+            { $set: { active: activeStatus } }
+        );
+        return 204;
+    }
 
-    return this;
-};
+    async getClients() {
+        await this._ensureConnected();
+        const clients = await this._collection.find({}, { projection: { name: 1 } }).toArray();
+        return clients.map(x => x.name);
+    }
+
+    async getClient(clientName) {
+        await this._ensureConnected();
+        const clients = await this._collection.find({ name: clientName }).toArray();
+        return clients.map(x => ({
+            name: x.name,
+            domains: x.domains,
+            active: !!x.active
+        }))[0];
+    }
+}
+
+exports.WhitelistService = WhitelistService;

@@ -1,37 +1,26 @@
 process.title = 'apps';
 
-var config = require('./config'),
-    Hapi = require('hapi'),
-    path = require('path'),
-    server = new Hapi.Server({
-        debug: {
-            log: ['error'],
-            request: ['error']
-        }
-    });
+const config = require('./config');
+const Hapi = require('@hapi/hapi');
+const path = require('path');
 
-var serverConfig = {
+const serverConfig = {
     host: config.server.host,
-    port: config.server.port
-};
-server.connection(serverConfig);
-
-var CONTEXT_ROOT = (config.server.contextRoot || ''),
-    REDIRECT_STATUSES = [301, 302, 303, 307];
-    ENDPOINTS = [];
-
-server.ext('onRequest', function(request, reply) {
-    if (CONTEXT_ROOT) {
-        request.path = request.path.replace(CONTEXT_ROOT, '');
+    port: config.server.port,
+    debug: {
+        log: ['error'],
+        request: ['error']
     }
+};
 
-    return reply.continue();
-});
+const CONTEXT_ROOT = (config.server.contextRoot || '');
+const REDIRECT_STATUSES = [301, 302, 303, 307];
+const ENDPOINTS = [];
 
-var generateAppRoute = function (appName, auth) {
-    var appEndpoint = '/' + appName + '/';
+const generateAppRoute = function (appName, auth) {
+    const appEndpoint = '/' + appName + '/';
     ENDPOINTS.push(appEndpoint);
-    var appRoute = {
+    const appRoute = {
         method: ['GET'],
         path: appEndpoint + '{path*}',
         config: {
@@ -56,46 +45,73 @@ var generateAppRoute = function (appName, auth) {
     }
     return appRoute;
 };
-server.register([
-        require('hapi-auth-cookie'),
-        require('blipp'),
-        require('inert'),
-        {
-            register: require('good'),
-            options: {
-                opsInterval: 5000,
-                reporters: [
-                    {
-                        reporter: require('good-console'),
-                        args: [{ log: 'error', response: 'error', request: 'error' }]
-                    }
-                ]
-            }
-        }
-    ],
-    function() {
-        server.auth.strategy('session', 'cookie', {
-            cookie: 'hiveschool_id',
-            password: config.cookie.password,
-            isSecure: config.cookie.is_secure,
-            clearInvalid: true,
-            appendNext: true,
-            redirectTo: CONTEXT_ROOT + '/login/'
-        });
 
-        server.route(generateAppRoute('login'));
-        server.route(generateAppRoute('teacher', 'session'));
-        server.route(generateAppRoute('student', 'session'));
+const init = async () => {
+    const server = Hapi.server(serverConfig);
+
+    server.ext('onRequest', (request, h) => {
+        if (CONTEXT_ROOT) {
+            request.path = request.path.replace(CONTEXT_ROOT, '');
+        }
+        return h.continue;
     });
 
-server.ext('onPreResponse', function(request, reply) {
-    if (REDIRECT_STATUSES.indexOf(request.response.statusCode) != -1 && ENDPOINTS.indexOf(request.response.headers.location) != -1) {
-        request.response.headers.location = CONTEXT_ROOT + request.response.headers.location;
-    }
-    return reply.continue();
-});
+    server.ext('onPreResponse', (request, h) => {
+        if (REDIRECT_STATUSES.indexOf(request.response.statusCode) != -1 &&
+            ENDPOINTS.indexOf(request.response.headers.location) != -1) {
+            request.response.headers.location = CONTEXT_ROOT + request.response.headers.location;
+        }
+        return h.continue;
+    });
 
-server.start(function() {
+    await server.register([
+        require('@hapi/cookie'),
+        require('blipp'),
+        require('@hapi/inert'),
+        {
+            plugin: require('@hapi/good'),
+            options: {
+                ops: {
+                    interval: 5000
+                },
+                reporters: {
+                    console: [
+                        {
+                            module: '@hapi/good-console',
+                            args: [{ log: 'error', response: 'error', request: 'error' }]
+                        },
+                        'stdout'
+                    ]
+                }
+            }
+        }
+    ]);
+
+    server.auth.strategy('session', 'cookie', {
+        cookie: {
+            name: 'hiveschool_id',
+            password: config.cookie.password,
+            isSecure: config.cookie.is_secure,
+            path: '/',
+            clearInvalid: true
+        },
+        keepAlive: true,
+        redirectTo: CONTEXT_ROOT + '/login/',
+        appendNext: true
+    });
+
+    server.route(generateAppRoute('login'));
+    server.route(generateAppRoute('teacher', 'session'));
+    server.route(generateAppRoute('student', 'session'));
+
+    await server.start();
     console.log('Server listening on ' + serverConfig.host + ':' + serverConfig.port);
     console.log('Serving apps from:', config.server.appsRoot);
+};
+
+process.on('unhandledRejection', (err) => {
+    console.log(err);
+    process.exit(1);
 });
+
+init();
