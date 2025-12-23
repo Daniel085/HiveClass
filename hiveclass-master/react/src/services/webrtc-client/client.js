@@ -291,3 +291,6 @@ var RTCClient = function(rendezvousEndpoint, peerId, signalingHandlers) {
         }
     };
 };
+
+// Export for ES6 modules
+export { RTCClient };

@@ -359,3 +359,6 @@ var RTCServer = function(rendezvousEndpoint, peerId, signalingHandlers) {
         return message.msgId;
     };
 };
+
+// Export for ES6 modules
+export { RTCServer };

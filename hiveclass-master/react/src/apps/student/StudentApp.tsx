@@ -1,24 +1,88 @@
+/**
+ * Student Application
+ *
+ * Main student app with classroom joining and video streaming.
+ * Migrated from Montage.js student app.
+ */
+
+import { useState, useEffect } from 'react';
+import { useClassroomStore } from '@/store/classroomStore';
+import { JoinClass } from './components/JoinClass';
+import { EnterClass } from './components/EnterClass';
+import { StudentDashboard } from './components/StudentDashboard';
+
+type StudentAppState = 'loading' | 'enterClass' | 'joinClass' | 'dashboard';
+
 export function StudentApp() {
-  return (
-    <div className="min-h-screen bg-blue-50">
-      <div className="max-w-7xl mx-auto p-8">
-        <h1 className="text-4xl font-bold text-blue-900 mb-4">Student App</h1>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-700 mb-4">
-            Phase 10.2: Student app will be built in Weeks 7-15
-          </p>
-          <div className="bg-green-50 border border-green-200 rounded-md p-4">
-            <h2 className="font-semibold text-green-800 mb-2">Features to build:</h2>
-            <ul className="list-disc list-inside text-sm text-green-700 space-y-1">
-              <li>Join classroom with code</li>
-              <li>WebRTC video/audio streams</li>
-              <li>Screen sharing</li>
-              <li>Chat with teacher</li>
-              <li>File sharing</li>
-            </ul>
-          </div>
+  const [appState, setAppState] = useState<StudentAppState>('loading');
+  const { isInClassroom, openClassrooms, listOpenClassrooms } = useClassroomStore();
+
+  // Initialize: Check for open classrooms on mount
+  useEffect(() => {
+    const initialize = async () => {
+      await listOpenClassrooms();
+      // After loading classrooms, decide initial state
+      setAppState('loading');
+    };
+
+    initialize();
+  }, [listOpenClassrooms]);
+
+  // Determine initial state based on classroom availability
+  useEffect(() => {
+    if (appState === 'loading') {
+      if (isInClassroom) {
+        setAppState('dashboard');
+      } else if (openClassrooms.length > 0) {
+        setAppState('enterClass');
+      } else {
+        setAppState('joinClass');
+      }
+    }
+  }, [appState, isInClassroom, openClassrooms]);
+
+  // Handle successful join
+  const handleJoined = () => {
+    setAppState('dashboard');
+  };
+
+  // Handle exit from classroom
+  const handleExit = () => {
+    setAppState('enterClass');
+    listOpenClassrooms();
+  };
+
+  // Loading state
+  if (appState === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-lg font-medium">Loading...</p>
         </div>
       </div>
-    </div>
+    );
+  }
+
+  // Render current state
+  return (
+    <>
+      {appState === 'joinClass' && (
+        <JoinClass
+          onJoined={handleJoined}
+          onCancel={() => setAppState('enterClass')}
+          hasOpenClassrooms={openClassrooms.length > 0}
+        />
+      )}
+
+      {appState === 'enterClass' && (
+        <EnterClass
+          onJoined={handleJoined}
+          onJoinWithCode={() => setAppState('joinClass')}
+        />
+      )}
+
+      {appState === 'dashboard' && <StudentDashboard onExit={handleExit} />}
+    </>
   );
 }
