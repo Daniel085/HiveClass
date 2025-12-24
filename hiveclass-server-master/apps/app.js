@@ -87,6 +87,15 @@ const init = async () => {
         }
     ]);
 
+    // Configure hiveschool_id cookie state for reading profile
+    server.state('hiveschool_id', {
+        isSecure: config.cookie.is_secure,
+        isHttpOnly: true,
+        path: '/',
+        encoding: 'iron',
+        password: config.cookie.password
+    });
+
     server.auth.strategy('session', 'cookie', {
         cookie: {
             name: 'hiveschool_id',
@@ -100,9 +109,13 @@ const init = async () => {
         appendNext: true
     });
 
+    // Register static file routes for Montage.js apps
     server.route(generateAppRoute('login'));
     server.route(generateAppRoute('teacher', 'session'));
     server.route(generateAppRoute('student', 'session'));
+
+    // Register classroom API routes
+    await server.register(require('./api/classroom'));
 
     await server.start();
     console.log('Server listening on ' + serverConfig.host + ':' + serverConfig.port);

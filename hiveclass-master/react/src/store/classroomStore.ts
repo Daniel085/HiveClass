@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { CLASSROOM_API } from '@/services/api-endpoints';
 
 export interface Classroom {
   id: string;
@@ -97,13 +98,11 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
   joinWithAccessCode: async (accessCode: string) => {
     set({ isJoining: true, error: null });
     try {
-      // TODO: Replace with actual API call to backend
-      // For now, mock implementation
-      const response = await fetch(`/api/classroom/join`, {
+      const response = await fetch(CLASSROOM_API.JOIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ accessCode }),
+        body: JSON.stringify({ code: accessCode }),
       });
 
       if (!response.ok) {
@@ -130,8 +129,7 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
   joinWithId: async (classroomId: string) => {
     set({ isJoining: true, error: null });
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch(`/api/classroom/${classroomId}/join`, {
+      const response = await fetch(CLASSROOM_API.JOIN_BY_ID(classroomId), {
         method: 'POST',
         credentials: 'include',
       });
@@ -158,8 +156,7 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
 
   listOpenClassrooms: async () => {
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch('/api/classroom/list', {
+      const response = await fetch(CLASSROOM_API.LIST, {
         method: 'GET',
         credentials: 'include',
       });
@@ -187,8 +184,7 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
       const { classroom } = get();
       if (!classroom) return;
 
-      // TODO: Replace with actual API call
-      await fetch(`/api/classroom/${classroom.id}/exit`, {
+      await fetch(CLASSROOM_API.EXIT(classroom.id), {
         method: 'POST',
         credentials: 'include',
       });

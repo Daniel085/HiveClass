@@ -1,25 +1,72 @@
+/**
+ * Teacher Application
+ *
+ * Main teacher app with classroom creation and student management.
+ * Migrated from Montage.js teacher app.
+ */
+
+import { useState, useEffect } from 'react';
+import { useTeacherStore } from '@/store/teacherStore';
+import { CreateClassroom } from './components/CreateClassroom';
+import { TeacherDashboard } from './components/TeacherDashboard';
+
+type TeacherAppState = 'loading' | 'create' | 'dashboard';
+
 export function TeacherApp() {
-  return (
-    <div className="min-h-screen bg-green-50">
-      <div className="max-w-7xl mx-auto p-8">
-        <h1 className="text-4xl font-bold text-green-900 mb-4">Teacher App</h1>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-700 mb-4">
-            Phase 10.3: Teacher app will be built in Weeks 16-24
-          </p>
-          <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h2 className="font-semibold text-purple-800 mb-2">Features to build:</h2>
-            <ul className="list-disc list-inside text-sm text-purple-700 space-y-1">
-              <li>Create and manage classrooms</li>
-              <li>View all student video feeds (grid layout)</li>
-              <li>Follow Me mode (teacher screen sharing)</li>
-              <li>Individual student controls (mute, kick)</li>
-              <li>Broadcast messaging to all students</li>
-              <li>Classroom locking</li>
-            </ul>
-          </div>
+  const [appState, setAppState] = useState<TeacherAppState>('loading');
+  const { isInClassroom, listClassrooms } = useTeacherStore();
+
+  // Initialize: Load saved classrooms
+  useEffect(() => {
+    const initialize = async () => {
+      await listClassrooms();
+      // Decide initial state
+      setAppState('loading');
+    };
+
+    initialize();
+  }, [listClassrooms]);
+
+  // Determine initial state
+  useEffect(() => {
+    if (appState === 'loading') {
+      if (isInClassroom) {
+        setAppState('dashboard');
+      } else {
+        setAppState('create');
+      }
+    }
+  }, [appState, isInClassroom]);
+
+  // Handle classroom created/entered
+  const handleEntered = () => {
+    setAppState('dashboard');
+  };
+
+  // Handle classroom closed
+  const handleClose = () => {
+    setAppState('create');
+    listClassrooms();
+  };
+
+  // Loading state
+  if (appState === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-lg font-medium">Loading...</p>
         </div>
       </div>
-    </div>
+    );
+  }
+
+  // Render current state
+  return (
+    <>
+      {appState === 'create' && <CreateClassroom onEntered={handleEntered} />}
+
+      {appState === 'dashboard' && <TeacherDashboard onClose={handleClose} />}
+    </>
   );
 }

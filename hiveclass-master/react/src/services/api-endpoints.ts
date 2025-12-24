@@ -47,6 +47,36 @@ export const WHITELIST_API = {
 } as const;
 
 /**
+ * Classroom API (Apps Server - Port 8082)
+ * Classroom CRUD operations for teachers and students
+ */
+export const CLASSROOM_API = {
+  /** Create new classroom (Teacher) */
+  CREATE: '/apps/api/classroom/create',
+
+  /** Get classroom by ID */
+  GET: (classroomId: string) => `/apps/api/classroom/${classroomId}`,
+
+  /** List all teacher's classrooms (Teacher) */
+  LIST_TEACHER: '/apps/api/classroom/teacher/list',
+
+  /** Close classroom (Teacher) */
+  CLOSE: (classroomId: string) => `/apps/api/classroom/${classroomId}/close`,
+
+  /** Join classroom via access code (Student) */
+  JOIN: '/apps/api/classroom/join',
+
+  /** Join classroom from list (Student) */
+  JOIN_BY_ID: (classroomId: string) => `/apps/api/classroom/${classroomId}/join`,
+
+  /** List all open classrooms (Student) */
+  LIST: '/apps/api/classroom/list',
+
+  /** Exit classroom (Student) */
+  EXIT: (classroomId: string) => `/apps/api/classroom/${classroomId}/exit`,
+} as const;
+
+/**
  * WebRTC Rendezvous API (Port 19090)
  * Classroom and WebRTC signaling management
  */
