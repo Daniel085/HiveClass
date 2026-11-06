@@ -1,6 +1,9 @@
 HiveSchool
 ===
 
+> **To run HiveClass locally today, see [`DEVELOPMENT.md`](../DEVELOPMENT.md)** (one `docker compose` command).
+> The steps below are the original 2016 instructions, kept for reference.
+
 Initial setup.
 -------------
 

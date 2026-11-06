@@ -1,0 +1,90 @@
+# Runs HiveClass as it was in 2016, unchanged, for local development.
+#   docker compose up --build
+# Then open http://localhost:8080/apps/login/ and see DEVELOPMENT.md.
+
+x-server: &server
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    target: server
+  image: hiveclass-server:dev
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+
+services:
+  mongo:
+    # mongodb driver 2.2 (used by auth and storage) does not support MongoDB 4.0+.
+    image: mongo:3.6
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      retries: 30
+
+  router:
+    <<: *server
+    command: ["node", "router/app.js"]
+    ports:
+      - "8080:8088"
+    environment:
+      AUTH_HOST: auth
+      APPS_HOST: apps
+      JIRA_HOST: jira
+      LOGGING_HOST: logging
+      STORAGE_HOST: storage
+
+  rendezvous:
+    <<: *server
+    command: ["node", "rendezvous/app.js"]
+    ports:
+      - "9090:9090"   # WebRTC signaling (WebSocket)
+
+  auth:
+    <<: *server
+    command: ["node", "auth/app.js"]
+    environment:
+      MONGODB_URL: mongodb://mongo:27017/auth
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  storage:
+    <<: *server
+    command: ["node", "storage/app.js"]
+    environment:
+      MONGODB_URL: mongodb://mongo:27017/storage
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  apps:
+    <<: *server
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: apps
+    image: hiveclass-apps:dev
+    command: ["node", "apps/app.js"]
+
+  logging:
+    <<: *server
+    command: ["node", "logging/app.js"]
+
+  jira:
+    <<: *server
+    command: ["node", "jira/app.js"]
+
+  # One-shot: allow sign-in from DEV_WHITELIST_DOMAINS (see .env.example).
+  seed-whitelist:
+    <<: *server
+    command: ["node", "seed-whitelist.js"]
+    restart: "no"
+    depends_on:
+      - auth
+
+volumes:
+  mongo-data:

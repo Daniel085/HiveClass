@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.logs
+hiveclass-master/builds
+hiveclass-master/e2e
+hiveclass-master/extensions
+hiveclass-master/hiveschool-bots
+hiveclass-server-master/deploy
+hiveclass-server-master/mongodb
+.env
+*.md

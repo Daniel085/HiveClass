@@ -1,6 +1,8 @@
+var env = process.env;
+
 module.exports = {
     server: {
-        host: 'localhost',
-        port: 8084
+        host: env.HOST || 'localhost',
+        port: parseInt(env.PORT || '8084', 10)
     }
 };

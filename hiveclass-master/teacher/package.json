@@ -4,9 +4,9 @@
   "dependencies": {
     "collections": "~1.2.0",
     "digit": "~0.5.0",
-    "matte": "git+http://github.com/montagejs/matte.git#master",
-    "montage": "git+http://github.com/montagejs/montage.git#a57cc46f766b60099b6094a0b62366eab8888aec",
-    "montage-webrtc": "git+http://github.com/montagestudio/montage-webrtc.git#master"
+    "matte": "git+https://github.com/montagejs/matte.git#f5826241231011ee3c6599ad147a7c33053d9928",
+    "montage": "git+https://github.com/montagejs/montage.git#a57cc46f766b60099b6094a0b62366eab8888aec",
+    "montage-webrtc": "git+https://github.com/montagestudio/montage-webrtc.git#efd28232636e7ed407800d8006ba4c32626d4fcf"
   },
   "devDependencies": {
     "montage-testing": "~0.4.0"
